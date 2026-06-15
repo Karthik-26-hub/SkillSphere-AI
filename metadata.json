@@ -1,0 +1,6 @@
+{
+  "name": "SkillSphere AI",
+  "description": "A professional AI-powered platform for continuously evaluating, scoring, and improving student technical, communication, cognitive, and soft skills.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

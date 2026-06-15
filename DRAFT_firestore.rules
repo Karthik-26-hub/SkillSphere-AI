@@ -1,0 +1,59 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // 1. Global Catch-all Deny Safety Net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Helper functions
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(email) {
+      return isSignedIn() && (
+        request.auth.token.email == email ||
+        (request.auth.token.email == null && request.auth.uid != null)
+      );
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    // Dynamic field-level and type validators for user profile
+    function isValidUserProfile(data) {
+      return data.email is string && data.email.size() <= 320 &&
+             data.name is string && data.name.size() <= 200 &&
+             data.employabilityScore is number &&
+             data.employabilityScore >= 0 && data.employabilityScore <= 100;
+    }
+
+    // 2. Main users collection path rules
+    match /users/{email} {
+      // Allow authenticated reads
+      allow get: if isSignedIn();
+      allow list: if isSignedIn() && (resource.data.email == request.auth.token.email);
+
+      // Create & Update actions
+      allow create: if isSignedIn() &&
+                    isOwner(email) &&
+                    isValidUserProfile(incoming()) &&
+                    incoming().email == email;
+
+      allow update: if isSignedIn() &&
+                    isOwner(email) &&
+                    isValidUserProfile(incoming()) &&
+                    incoming().email == existing().email;
+
+      // Restrict delete
+      allow delete: if isSignedIn() && isOwner(email);
+    }
+  }
+}

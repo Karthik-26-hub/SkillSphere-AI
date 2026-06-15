@@ -1,0 +1,38 @@
+{
+  "entities": {
+    "UserProfileDocument": {
+      "title": "UserProfileDocument",
+      "description": "The complete state payload for a candidate or student user, updated in real-time.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "description": "The email of the candidate." },
+        "email": { "type": "string", "description": "User email address." },
+        "name": { "type": "string", "description": "Full legal name." },
+        "collegeName": { "type": "string", "description": "College name." },
+        "degree": { "type": "string", "description": "Degree program." },
+        "graduationYear": { "type": "string", "description": "Graduation year." },
+        "cgpa": { "type": "string", "description": "Cumulative CGPA." },
+        "experienceLevel": { "type": "string", "description": "Entry, Mid, or Senior." },
+        "avatarUrl": { "type": "string", "description": "URL of the profile avatar." },
+        "skills": { "type": "array", "description": "Array of skills." },
+        "employabilityScore": { "type": "number", "description": "The employability index score, ranging from 0-100." },
+        "education": { "type": "object", "description": "Detail of academic score history." },
+        "resumeAnalysis": { "type": "object", "description": "Natural language resume feedback payload." },
+        "skillScores": { "type": "array", "description": "List of skill evaluation indexes." },
+        "projects": { "type": "array", "description": "Candidate portfolio systems." },
+        "certifications": { "type": "array", "description": "Verified certifications." },
+        "internships": { "type": "array", "description": "Internship targets." },
+        "badges": { "type": "array", "description": "Unlocked developer honors and tags." },
+        "notifications": { "type": "array", "description": "User system notifications." },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Last update server real-time timestamp." }
+      },
+      "required": ["email", "name", "employabilityScore"]
+    }
+  },
+  "firestore": {
+    "/users/{email}": {
+      "schema": "UserProfileDocument",
+      "description": "Collection tracking candidate files and scorecards under their keyed email address."
+    }
+  }
+}
