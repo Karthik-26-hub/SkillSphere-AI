@@ -14,3 +14,5 @@ appium-tests/screenshots/*.png
 appium-tests/self_test_report.xlsx
 key.env
 
+selenium-tests/node_modules/
+selenium-tests/screenshots/*.png

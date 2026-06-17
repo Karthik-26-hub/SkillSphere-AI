@@ -1,0 +1,15 @@
+{
+  "name": "skillsphereai-selenium-tests",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "E2E Web Automation testing suite using Selenium and Node.js",
+  "main": "run_suite.js",
+  "scripts": {
+    "test": "node run_suite.js"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.5",
+    "exceljs": "^4.4.0",
+    "selenium-webdriver": "^4.20.0"
+  }
+}
