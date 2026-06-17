@@ -6,3 +6,11 @@ coverage/
 *.log
 .env*
 !.env.example
+
+.idea/
+__pycache__/
+*.pyc
+appium-tests/screenshots/*.png
+appium-tests/self_test_report.xlsx
+key.env
+
