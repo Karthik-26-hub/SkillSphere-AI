@@ -399,31 +399,40 @@ Analyze these cognitive choices. Return strictly a JSON object with 'personality
   }
 });
 
+// ─── Health Check Endpoint (responds immediately, before Vite is ready) ───────
+app.get("/api/health", (_req, res) => {
+  res.json({ status: "ok", mode: process.env.NODE_ENV || "development", timestamp: Date.now() });
+});
+
 // Serve Vite dev server or static compiled dist assets
 const isProd = process.env.NODE_ENV === "production";
 
 if (!isProd) {
+  // IMPORTANT: Bind the Express server immediately so /api/health is reachable
+  // BEFORE Vite finishes its (slow) initialization on CI runners.
+  app.listen(PORT, "0.0.0.0", () => {
+    console.log(`[Dev Mode] Express API ready on port ${PORT}. Initializing Vite dev server...`);
+  });
+
+  // Async Vite init — attaches frontend middleware once ready
   createViteServer({
     server: { middlewareMode: true },
     appType: "spa",
   }).then((vite) => {
     app.use(vite.middlewares);
-
-    // Default error handling or generic routing fallback
-    app.use((err: any, req: any, res: any, next: any) => {
-      console.error("Error in Vite dev proxy middleware:", err);
-      res.status(500).send("Something went wrong loading AI Studio build dependencies.");
+    app.use((err: any, _req: any, res: any, _next: any) => {
+      console.error("Vite middleware error:", err);
+      res.status(500).send("Vite dev server error.");
     });
-
-    app.listen(PORT, "0.0.0.0", () => {
-      console.log(`[Dev Mode] Full-Stack Cognitive AI Server running on host 0.0.0.0, port ${PORT}`);
-    });
+    console.log(`[Dev Mode] Vite frontend middleware attached on port ${PORT}.`);
+  }).catch((err) => {
+    console.error("[Dev Mode] Failed to initialize Vite server:", err);
   });
 } else {
-  // Serve static files in production
+  // Production: serve pre-built static files
   const distPath = path.join(process.cwd(), "dist");
   app.use(express.static(distPath));
-  
+
   app.get("*", (req, res) => {
     res.sendFile(path.join(distPath, "index.html"));
   });

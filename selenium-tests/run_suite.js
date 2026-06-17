@@ -10,19 +10,30 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const PROJECT_ROOT = path.resolve(__dirname, "..");
 
-// ─── CHECK IF WEB APP IS ALREADY RUNNING ─────────────────────────────────────
+// ─── CHECK IF WEB APP IS ALIVE VIA HEALTH ENDPOINT ───────────────────────────
 
-function isAppRunning(url) {
+async function isServerHealthy(baseUrl, timeoutMs = 4000) {
   return new Promise((resolve) => {
-    const urlObj = new URL(url);
+    const url = new URL("/api/health", baseUrl);
     const req = http.request(
-      { hostname: urlObj.hostname, port: urlObj.port || 80, path: urlObj.pathname, method: "GET" },
-      () => resolve(true)
+      { hostname: url.hostname, port: url.port || 80, path: url.pathname, method: "GET" },
+      (res) => resolve(res.statusCode === 200)
     );
     req.on("error", () => resolve(false));
-    req.setTimeout(3000, () => { req.destroy(); resolve(false); });
+    req.setTimeout(timeoutMs, () => { req.destroy(); resolve(false); });
     req.end();
   });
+}
+
+// ─── KILL ENTIRE PROCESS TREE (Linux-safe) ───────────────────────────────────
+
+function killProcessTree(pid) {
+  try {
+    // On Linux: kill the entire process group to catch npm → tsx child processes
+    process.kill(-pid, "SIGTERM");
+  } catch {
+    try { process.kill(pid, "SIGTERM"); } catch { /* already dead */ }
+  }
 }
 
 // ─── ENSURE DEPENDENCIES INSTALLED ───────────────────────────────────────────
@@ -30,7 +41,7 @@ function isAppRunning(url) {
 function ensureDependencies() {
   const nodeModulesPath = path.join(__dirname, "node_modules");
   if (!fs.existsSync(nodeModulesPath)) {
-    console.log("[*] Installing Node.js dependencies...");
+    console.log("[*] Installing Selenium suite Node.js dependencies...");
     execSync("npm install", { cwd: __dirname, stdio: "inherit" });
     console.log("[+] Dependencies installed.\n");
   }
@@ -43,53 +54,70 @@ function ensureDependencies() {
   console.log("   SKILLSPHEREAI SELENIUM WEB TEST RUNNER");
   console.log("=".repeat(60));
 
-  // 1. Check if app is live
-  console.log(`\n[*] Checking if web app is running at: ${CONFIG.baseUrl}`);
-  const appOnline = await isAppRunning(CONFIG.baseUrl);
+  ensureDependencies();
+
+  // 1. Check if the server is already running (CI pre-starts it)
+  const baseUrl = CONFIG.baseUrl;
+  console.log(`\n[*] Checking server health at: ${baseUrl}/api/health`);
+  const alreadyRunning = await isServerHealthy(baseUrl);
 
   let devServer = null;
-  if (!appOnline) {
-    console.log("[!] App not running. Starting dev server automatically...");
+  let devServerPid = null;
+
+  if (!alreadyRunning) {
+    console.log("[!] Server not running. Starting dev server automatically...");
     devServer = spawn("npm", ["run", "dev"], {
       cwd: PROJECT_ROOT,
-      shell: true,
-      stdio: "pipe"
+      shell: false,                     // ← false so spawn creates a real process (not shell wrapper)
+      detached: true,                   // ← detached so we can kill the whole process group
+      stdio: ["ignore", "pipe", "pipe"]
     });
+
+    devServerPid = devServer.pid;
     devServer.stdout.on("data", (d) => process.stdout.write(`[server] ${d}`));
     devServer.stderr.on("data", (d) => process.stderr.write(`[server] ${d}`));
+    devServer.on("error", (err) => console.error("[server] Spawn error:", err));
 
-    // Wait up to 15 seconds for the server to respond
-    let attempts = 0;
+    // Wait up to 120 seconds for the server to be healthy (Vite can be slow on CI)
+    const MAX_WAIT_SECONDS = 120;
+    const POLL_INTERVAL_MS = 2000;
+    let elapsed = 0;
     let ready = false;
-    while (attempts < 15) {
-      await new Promise(r => setTimeout(r, 1000));
-      ready = await isAppRunning(CONFIG.baseUrl);
+
+    console.log(`[*] Waiting up to ${MAX_WAIT_SECONDS}s for server health check...`);
+    while (elapsed < MAX_WAIT_SECONDS * 1000) {
+      await new Promise(r => setTimeout(r, POLL_INTERVAL_MS));
+      elapsed += POLL_INTERVAL_MS;
+      ready = await isServerHealthy(baseUrl);
       if (ready) break;
-      attempts++;
-      process.stdout.write(".");
+      process.stdout.write(`  [${Math.floor(elapsed / 1000)}s] Waiting...`);
+      console.log();
     }
-    console.log();
 
     if (!ready) {
-      console.error("\n[!] Error: Web app could not be started within 15 seconds.");
-      console.error("    Please start the server manually:  npm run dev");
+      console.error(`\n[!] Server did not become healthy within ${MAX_WAIT_SECONDS} seconds.`);
+      if (devServerPid) killProcessTree(devServerPid);
       process.exit(1);
     }
-    console.log("[+] Dev server is live.\n");
+    console.log("[+] Dev server is live and healthy.\n");
   } else {
-    console.log("[+] Web application is already running.\n");
+    console.log("[+] Server is already running (CI pre-started mode).\n");
   }
 
   // 2. Run Selenium E2E tests
+  let exitCode = 0;
   try {
     await runTests();
   } catch (err) {
     console.error("\n[!] Fatal error during test execution:", err.message);
+    exitCode = 1;
   } finally {
-    if (devServer) {
-      console.log("\n[*] Shutting down dev server...");
-      devServer.kill("SIGTERM");
+    if (devServer && devServerPid) {
+      console.log("\n[*] Shutting down dev server (process tree)...");
+      killProcessTree(devServerPid);
     }
     console.log("[+] Suite runner finished.\n");
   }
+
+  process.exit(exitCode);
 })();

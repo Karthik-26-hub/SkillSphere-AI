@@ -7,9 +7,13 @@ on:
     branches: [ main ]
 
 jobs:
+  # ─────────────────────────────────────────────────────────────────────────────
+  # JOB 1: Selenium Web E2E Tests (Production Build + Static Serve)
+  # ─────────────────────────────────────────────────────────────────────────────
   web-tests:
     name: Selenium E2E Web Tests
     runs-on: ubuntu-latest
+    timeout-minutes: 25
 
     steps:
     - name: Checkout Code
@@ -21,18 +25,70 @@ jobs:
         node-version: 20
         cache: 'npm'
 
-    - name: Install Project Dependencies
-      run: npm install
+    - name: Cache Selenium Manager Downloads
+      uses: actions/cache@v4
+      with:
+        path: ~/.cache/selenium
+        key: selenium-${{ runner.os }}-${{ hashFiles('selenium-tests/package-lock.json') }}
+        restore-keys: selenium-${{ runner.os }}-
+
+    - name: Install Root Project Dependencies
+      run: npm ci
 
     - name: Install Selenium Suite Dependencies
       working-directory: ./selenium-tests
-      run: npm install
+      run: npm ci
 
-    - name: Run Web App and Selenium E2E Tests
+    - name: Build Frontend (Vite Production Build)
+      run: npm run build
+      env:
+        NODE_ENV: production
+
+    - name: Start Production Server (Background)
+      run: |
+        NODE_ENV=production node dist/server.cjs &
+        echo "SERVER_PID=$!" >> $GITHUB_ENV
+      env:
+        NODE_ENV: production
+        GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+
+    - name: Wait for Server Health Check
+      run: |
+        echo "[*] Waiting for server to be ready on port 3000..."
+        for i in $(seq 1 60); do
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:3000/api/health || true)
+          if [ "$STATUS" = "200" ]; then
+            echo "[+] Server is healthy after ${i}s"
+            exit 0
+          fi
+          echo "  Attempt $i/60: status=$STATUS, retrying in 2s..."
+          sleep 2
+        done
+        echo "[!] Server did not become healthy within 120 seconds. Dumping server log:"
+        cat /tmp/server.log 2>/dev/null || echo "(no log file)"
+        exit 1
+
+    - name: Verify Chrome Installation
+      run: |
+        google-chrome --version || chromium-browser --version
+        echo "[+] Chrome is available."
+
+    - name: Run Selenium E2E Tests
       working-directory: ./selenium-tests
+      timeout-minutes: 15
       env:
         TEST_HEADLESS: "true"
+        TEST_URL: "http://localhost:3000"
+        TEST_TIMEOUT: "20000"
       run: node run_suite.js
+
+    - name: Stop Production Server
+      if: always()
+      run: |
+        if [ -n "$SERVER_PID" ]; then
+          kill "$SERVER_PID" 2>/dev/null || true
+          echo "[+] Server process $SERVER_PID stopped."
+        fi
 
     - name: Upload Selenium Test Report
       if: always()
@@ -40,10 +96,23 @@ jobs:
       with:
         name: selenium-test-report
         path: selenium-tests/selenium_test_report.xlsx
+        retention-days: 30
 
+    - name: Upload Screenshots on Failure
+      if: failure()
+      uses: actions/upload-artifact@v4
+      with:
+        name: selenium-screenshots
+        path: selenium-tests/screenshots/
+        retention-days: 7
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # JOB 2: Appium Mobile Tests (Simulation / Dry-Run Mode)
+  # ─────────────────────────────────────────────────────────────────────────────
   mobile-tests:
     name: Appium E2E Mobile Tests (Simulation Mode)
     runs-on: ubuntu-latest
+    timeout-minutes: 15
 
     steps:
     - name: Checkout Code
@@ -63,6 +132,7 @@ jobs:
 
     - name: Run Appium E2E Tests (Dry-Run / Simulation Mode)
       working-directory: ./appium-tests
+      timeout-minutes: 10
       env:
         APPIUM_DRY_RUN: "true"
       run: python run_suite.py
@@ -73,3 +143,4 @@ jobs:
       with:
         name: appium-test-report
         path: appium-tests/appium_test_report.xlsx
+        retention-days: 30
