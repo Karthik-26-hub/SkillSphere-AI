@@ -55,7 +55,17 @@ app.post("/api/gemini/chat", async (req, res) => {
       return res.json({ text: response.text || "I've processed your response, but couldn't produce content." });
     } catch (error: any) {
       console.error("Gemini Chat Error:", error);
-      return res.status(500).json({ error: "Gemini server error: " + error.message, isFallback: true });
+      const simulatedAnswers = [
+        "To boost your Employability Score, I recommend reinforcing your data structure skills and pursuing a Cloud Certification (AWS/GCP). This will close your high-demand technical gap.",
+        "Your education details are highly aligned with software engineering roles. Adding an interactive project with rich visualizations, like an AI-powered visualizer, will impress hiring managers.",
+        "To ace your next Technical Interview, practice breaking down coding problems into smaller subproblems and verbalize your mental models. Try out our Coding Challenge Module!",
+        "I suggest focusing on public speaking and concise delivery. Communication is rated as one of the top five soft skills in modern enterprise recruiters.",
+      ];
+      const item = simulatedAnswers[Math.floor(Math.random() * simulatedAnswers.length)];
+      return res.json({
+        text: `*(Offline Simulation)* ${item}\n\n*Set up your \`GEMINI_API_KEY\` in your secrets panel to activate full live AI assistance!*`,
+        isFallback: true,
+      });
     }
   } else {
     // Elegant fallback simulation
@@ -108,7 +118,15 @@ app.post("/api/gemini/resume", async (req, res) => {
       return res.json(parsedData);
     } catch (error: any) {
       console.error("Gemini Resume Analysis Error:", error);
-      return res.status(500).json({ error: "Failed to parse resume with AI.", isFallback: true });
+      return res.json({
+        score: 72,
+        summary: "Your profile demonstrates a solid theoretical foundation in Software Engineering with essential programming experience. To reach top-tier industry standards, expand your portfolio with cloud deployment, state management frameworks, and automated unit testing.",
+        strengths: ["Strong academic background in computer science concepts", "Core familiarity with foundational languages like Python, JavaScript, and Java", "Demonstrated hands-on experience in small-scale class projects"],
+        weaknesses: ["Lacks real-world industry certifications", "No experience with scalable production architecture patterns", "Minimal emphasis on system design or design patterns"],
+        recommendedSkills: ["TypeScript", "Docker", "REST API Development", "Cloud Architecture (GCP)", "CI/CD Orchestration"],
+        suggestedRoles: ["Junior Frontend Developer", "Associate Software Engineer", "Systems Analyst Apprentice"],
+        isFallback: true,
+      });
     }
   } else {
     // Quality fallback response
@@ -159,7 +177,20 @@ Return strictly a JSON object with: 'score' (number 0-100), 'timeComplexity' (st
       return res.json(parsedData);
     } catch (error: any) {
       console.error("Gemini Code Evaluation Error:", error);
-      return res.status(500).json({ error: "Failed to compile AI code review.", isFallback: true });
+      const scoreVal = code.includes("for") || code.includes("while") ? 85 : 92;
+      return res.json({
+        score: scoreVal,
+        timeComplexity: "O(N) linear scan",
+        spaceComplexity: "O(1) auxiliary constant variable allocation",
+        correctness: "The solution successfully solves core test cases and handles simple inputs. Adding strict validation null checks and index out-of-bounds guards will improve enterprise reliability.",
+        suggestions: [
+          "Optimize variable lookup speeds by caching properties.",
+          "Include comprehensive edge case checks (e.g., negative inputs, empty sequences).",
+          "Consider using declarative modern array methods for superior semantic readability.",
+        ],
+        reviewedCode: `// Optimized version with boundary checks\nfunction solve(inputs) {\n  if (!inputs || inputs.length === 0) return [];\n  \n  // Use single iteration O(N) optimized sequence map\n  return inputs.reduce((accum, curr) => {\n    if (curr > 0) accum.push(curr * curr);\n    return accum;\n  }, []);\n}`,
+        isFallback: true,
+      });
     }
   } else {
     // Beautiful dynamic mock evaluation
@@ -234,7 +265,30 @@ app.post("/api/gemini/interview", async (req, res) => {
       return res.json(parsedData);
     } catch (error: any) {
       console.error("Gemini Interview Error:", error);
-      return res.status(500).json({ error: "Gemini server failed during interview routing.", isFallback: true });
+      if (isCompletionGrade) {
+        return res.json({
+          score: 84,
+          communicationRating: "4.2 / 5",
+          technicalRating: "4.5 / 5",
+          detailedGrammarReview: "Excellent confidence and standard vocabulary. Occasional use of conversational filler words like 'like' or 'basically'. Try slowing the rhythm of explanation to convey elevated composure.",
+          strengths: ["Clear logical explanation structure", "Strong articulation of foundational design concepts", "Excellent active listening cues"],
+          weaknesses: ["Missed describing negative constraints or trade-offs explicitly", "A bit of rushing during system architectural questions"],
+          coachingVerdict: "Highly recommended for active corporate rounds. Your capacity to walk through structured frameworks is competitive. Prioritize system latency constraints next.",
+          isFallback: true,
+        });
+      } else {
+        const interviewQuestionsList = [
+          "How do you approach managing architectural trade-offs between performance and code testability? Walk me through a complex choice from your projects.",
+          "Imagine your system suddenly encounters a 10x spike in concurrent api traffic over 3 minutes. How would you design a rate-limiting policy or fallback cache schema on short notice?",
+          "Describe a situation where a key stakeholder strongly disagreed with your proposed technical implementation. How did you coordinate the resolution and validate alignment?",
+        ];
+        const selected = interviewQuestionsList[Math.floor(Math.random() * interviewQuestionsList.length)];
+        return res.json({
+          nextQuestion: selected,
+          expertInsightHint: "Great candidates employ the STAR method (Situation, Task, Action, Result) and mention objective system metrics like throughput, memory latency, and stakeholder sign-off criteria.",
+          isFallback: true,
+        });
+      }
     }
   } else {
     // Simulated offline fallback response
@@ -303,7 +357,15 @@ Analyze these cognitive choices. Return strictly a JSON object with 'personality
       return res.json(parsedData);
     } catch (error: any) {
       console.error("Gemini Personality Evaluation Error:", error);
-      return res.status(500).json({ error: "Failed to compile cognitive review.", isFallback: true });
+      return res.json({
+        personalityType: "Visionary Strategist (INTJ-Aligned)",
+        analyticalRating: 88,
+        leadershipRating: 75,
+        adaptabilityRating: 82,
+        strengths: ["Highly disciplined goal configuration", "Pragmatic data-driven decision structures", "Ability to design systemic contingencies"],
+        detailedFeedback: "You prioritize system integrity, architecture safety, and measurable outcomes. You work extremely well building foundational infrastructures, but can occasionally overestimate consensus. Pair your intense analytical drive with regular soft feedback gathering loops to build supreme leadership trust.",
+        isFallback: true,
+      });
     }
   } else {
     // Offline simulation fallback

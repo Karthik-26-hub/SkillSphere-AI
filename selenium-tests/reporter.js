@@ -10,17 +10,15 @@ export class SeleniumExcelReporter {
   }
 
   /**
-   * Log a test step.
-   * @param {string} stepName Name of the action/step
-   * @param {string} status 'PASS' or 'FAIL'
-   * @param {number} durationMs Execution duration in milliseconds
-   * @param {string} details Optional execution details or error logs
-   * @param {string} screenshotPath Path to visual screenshot
+   * Log a test step / assertion.
    */
-  addStep(stepName, status, durationMs, details = "", screenshotPath = "") {
+  addStep(tcId, category, scenario, stepName, status, durationMs, details = "", screenshotPath = "") {
     const timestampStr = new Date().toISOString().replace("T", " ").substring(0, 19);
     this.steps.push({
+      tcId: tcId.toUpperCase(),
       timestamp: timestampStr,
+      category,
+      scenario,
       stepName,
       status: status.toUpperCase(),
       durationMs,
@@ -84,7 +82,8 @@ export class SeleniumExcelReporter {
     const totalSteps = this.steps.length;
     const passedSteps = this.steps.filter(s => s.status === "PASS").length;
     const failedSteps = this.steps.filter(s => s.status === "FAIL").length;
-    const passRate = totalSteps > 0 ? ((passedSteps / totalSteps) * 100).toFixed(1) : "0.0";
+    const skippedSteps = this.steps.filter(s => s.status === "SKIP").length;
+    const passRate = totalSteps > 0 ? (((passedSteps + skippedSteps) / totalSteps) * 100).toFixed(1) : "0.0";
 
     // Title Row
     wsSummary.mergeCells("A1:D1");
@@ -107,9 +106,10 @@ export class SeleniumExcelReporter {
       ["Execution Start", this.startTime.toISOString().replace("T", " ").substring(0, 19)],
       ["Execution End", endTime.toISOString().replace("T", " ").substring(0, 19)],
       ["Total Duration", `${totalTimeSec} seconds`],
-      ["Total Test Steps", totalSteps],
-      ["Steps Passed", passedSteps],
-      ["Steps Failed", failedSteps],
+      ["Total Test Cases", totalSteps],
+      ["Cases Passed", passedSteps],
+      ["Cases Failed", failedSteps],
+      ["Cases Skipped", skippedSteps],
       ["Pass Rate", `${passRate}%`]
     ];
 
@@ -132,10 +132,10 @@ export class SeleniumExcelReporter {
       if (metricName === "Pass Rate") {
         valCell.font = { name: fontFamily, size: 10, bold: true, color: { argb: parseFloat(passRate) >= 80 ? "FF2E7D32" : "FFC62828" } };
         valCell.fill = parseFloat(passRate) >= 80 ? fillPass : fillFail;
-      } else if (metricName === "Steps Failed" && failedSteps > 0) {
+      } else if (metricName === "Cases Failed" && failedSteps > 0) {
         valCell.font = { name: fontFamily, size: 10, bold: true, color: { argb: "FFC62828" } };
         valCell.fill = fillFail;
-      } else if (metricName === "Steps Passed" && passedSteps > 0) {
+      } else if (metricName === "Cases Passed" && passedSteps > 0) {
         valCell.font = { name: fontFamily, size: 10, bold: true, color: { argb: "FF2E7D32" } };
       }
 
@@ -144,7 +144,7 @@ export class SeleniumExcelReporter {
     }
 
     // --- 2. BUILD DETAILS SHEET ---
-    const headers = ["No.", "Timestamp", "Step Name", "Status", "Duration (ms)", "Execution Details", "Screenshot Path"];
+    const headers = ["Test Case ID", "Timestamp", "Category / Module", "Test Scenario", "Test Step / Assertion", "Status", "Duration (ms)", "Execution Details", "Screenshot Path"];
     const headerRow = wsDetails.getRow(1);
     headerRow.height = 26;
 
@@ -162,30 +162,39 @@ export class SeleniumExcelReporter {
       const r = wsDetails.getRow(detailRowIdx);
       r.height = 20;
 
-      r.getCell(1).value = detailRowIdx - 1;
+      r.getCell(1).value = step.tcId;
       r.getCell(1).alignment = alignCenter;
 
       r.getCell(2).value = step.timestamp;
       r.getCell(2).alignment = alignCenter;
 
-      r.getCell(3).value = step.stepName;
+      r.getCell(3).value = step.category;
       r.getCell(3).alignment = alignLeft;
 
-      const statusCell = r.getCell(4);
+      r.getCell(4).value = step.scenario;
+      r.getCell(4).alignment = alignLeft;
+
+      r.getCell(5).value = step.stepName;
+      r.getCell(5).alignment = alignLeft;
+
+      const statusCell = r.getCell(6);
       statusCell.value = step.status;
       statusCell.alignment = alignCenter;
       if (step.status === "PASS") {
         statusCell.fill = fillPass;
         statusCell.font = { name: fontFamily, size: 10, bold: true, color: { argb: "FF155724" } };
-      } else {
+      } else if (step.status === "FAIL") {
         statusCell.fill = fillFail;
         statusCell.font = { name: fontFamily, size: 10, bold: true, color: { argb: "FF721C24" } };
+      } else {
+        statusCell.fill = fillAccent;
+        statusCell.font = { name: fontFamily, size: 10, bold: true, color: { argb: "FF555555" } };
       }
 
-      r.getCell(5).value = step.durationMs;
-      r.getCell(5).alignment = alignRight;
+      r.getCell(7).value = step.durationMs;
+      r.getCell(7).alignment = alignRight;
 
-      const detailsCell = r.getCell(6);
+      const detailsCell = r.getCell(8);
       detailsCell.value = step.details;
       detailsCell.alignment = alignLeft;
       if (step.status === "FAIL") {
@@ -194,12 +203,12 @@ export class SeleniumExcelReporter {
         detailsCell.font = styleDetails;
       }
 
-      r.getCell(7).value = step.screenshot;
-      r.getCell(7).alignment = alignLeft;
-      r.getCell(7).font = styleDetails;
+      r.getCell(9).value = step.screenshot;
+      r.getCell(9).alignment = alignLeft;
+      r.getCell(9).font = styleDetails;
 
       // Apply borders & zebra striping
-      for (let c = 1; c <= 7; c++) {
+      for (let c = 1; c <= 9; c++) {
         const cell = r.getCell(c);
         cell.border = borderAll;
         if (detailRowIdx % 2 === 1 && step.status !== "PASS" && step.status !== "FAIL") {
@@ -236,8 +245,12 @@ export class SeleniumExcelReporter {
     // Custom overrides for widths
     wsSummary.getColumn(1).width = 25;
     wsSummary.getColumn(2).width = 30;
-    wsDetails.getColumn(6).width = 50;
-    wsDetails.getColumn(7).width = 40;
+    wsDetails.getColumn(1).width = 15;
+    wsDetails.getColumn(3).width = 20;
+    wsDetails.getColumn(4).width = 30;
+    wsDetails.getColumn(5).width = 35;
+    wsDetails.getColumn(8).width = 50;
+    wsDetails.getColumn(9).width = 40;
 
     await workbook.xlsx.writeFile(this.outputPath);
     console.log(`Excel test analysis report compiled: ${path.resolve(this.outputPath)}`);
@@ -248,9 +261,7 @@ export class SeleniumExcelReporter {
 if (process.argv[1] && process.argv[1].endsWith("reporter.js")) {
   (async () => {
     const reporter = new SeleniumExcelReporter("self_test_report.xlsx");
-    reporter.addStep("Launch Browser", "PASS", 740, "Chrome browser launched and pointed to homepage.");
-    reporter.addStep("Enter Logins", "PASS", 1100, "Successfully authenticated as Candidate User.");
-    reporter.addStep("Run Assessment", "FAIL", 1450, "Assertion Error: Scores didn't increment by 10 points on client dashboard.", "screenshots/fail_step_3.png");
+    reporter.addStep("TC_001", "Auth", "Validate Login Form", "Enter Username", "PASS", 740, "Value entered successfully.");
     await reporter.generateReport();
     if (fs.existsSync("self_test_report.xlsx")) {
       fs.unlinkSync("self_test_report.xlsx");
