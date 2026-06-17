@@ -1,3 +1,21 @@
+import { fileURLToPath } from "node:url";
+
+// Monkey patch fileURLToPath to work around tsx + Vite 6 loader invalid scheme errors on Unix CI runners
+const originalFileURLToPath = fileURLToPath;
+(globalThis as any).fileURLToPath = (url: string | URL) => {
+  try {
+    return originalFileURLToPath(url);
+  } catch (e: any) {
+    if (e.code === "ERR_INVALID_URL_SCHEME") {
+      if (typeof url === "string") {
+        return url.startsWith("file://") ? originalFileURLToPath(url) : url;
+      }
+      return url.pathname || String(url);
+    }
+    throw e;
+  }
+};
+
 import express from "express";
 import path from "path";
 import dotenv from "dotenv";
